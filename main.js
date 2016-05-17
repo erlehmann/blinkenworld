@@ -18,29 +18,21 @@ var map = new OpenLayers.Map(
     {maxResolution: 0.703125}
 );
 
-var wmscURL = [
-    "http://wmsc1.terrapages.net/getmap?",
-    "http://wmsc2.terrapages.net/getmap?",
-    "http://wmsc3.terrapages.net/getmap?",
-    "http://wmsc4.terrapages.net/getmap?"
-];
-var terrapagesStreetLayer = new OpenLayers.Layer.WMS(
-    'TerraPages Street',
-    wmscURL,
-    {
-        layers: 'UnprojectedStreet',
-        format: 'image/jpeg'
-    },
-    {
-        buffer: 1,
-        isBaseLayer: true
-    }
-);
-map.addLayer(terrapagesStreetLayer);
+var osm = new OpenLayers.Layer.OSM();
+osm.displayInLayerSwitcher = false;
+map.addLayer(osm);
+map.addControl(new OpenLayers.Control.LayerSwitcher());
+
 map.zoomToMaxExtent();
+map.zoomIn();
+
 
 document.addEventListener('DOMContentLoaded', function (){
     var markersLayer = new OpenLayers.Layer.Markers('Countryballs');
+    var markersLayerBG = new OpenLayers.Layer.Markers('Countryballs Background');
+    markersLayer.displayInLayerSwitcher = false;
+    markersLayerBG.displayInLayerSwitcher = false;
+    var markersLayerMS = new OpenLayers.Layer.Markers('Multisize-Countryballs');
 
     var req = new XMLHttpRequest();
     req.open('GET', 'http://krautchan.net/ajax/geoip/lasthour', true);
@@ -60,11 +52,19 @@ document.addEventListener('DOMContentLoaded', function (){
 
                     iconImage.onload = function(e) {
 			var iconSize = new OpenLayers.Size(this.naturalWidth, this.naturalHeight);
+			var iconOffset = new OpenLayers.Pixel(-(iconSize.w/2), -iconSize.h);
+
+			var marker = new OpenLayers.Marker(
+			    new OpenLayers.LonLat(this.lon, this.lat).transform(new OpenLayers.Projection("EPSG:4326"), map.getProjectionObject()),
+			    new OpenLayers.Icon(this.src, iconSize, iconOffset)
+			);                        
+
 			var factor = Math.ceil(Math.sqrt(this.count));
 			if (factor > 4) {
 			    factor = 4;
 			};
 			if (factor > 1) {
+			    markersLayerBG.addMarker(marker);			
 			    var canvas = document.createElement('canvas');
 			    canvas.setAttribute('width', this.naturalWidth + 4);
 			    canvas.setAttribute('height',this.naturalHeight + 4);
@@ -77,20 +77,22 @@ document.addEventListener('DOMContentLoaded', function (){
 			    this.src = scaledImage.toDataURL('image/png');
 			    iconSize.w = scaledImage.width;
 			    iconSize.h = scaledImage.height;
-			};
-                        var iconOffset = new OpenLayers.Pixel(-(iconSize.w/2), -iconSize.h);
-
-                        var marker = new OpenLayers.Marker(
-                            new OpenLayers.LonLat(this.lon, this.lat),
-                            new OpenLayers.Icon(this.src, iconSize, iconOffset)
-                        );
-
-                        markersLayer.addMarker(marker);
+			    iconOffset = new OpenLayers.Pixel(-(iconSize.w/2), 2 * factor + 2 - iconSize.h);
+			    marker = new OpenLayers.Marker(
+				new OpenLayers.LonLat(this.lon, this.lat).transform(new OpenLayers.Projection("EPSG:4326"), map.getProjectionObject()),
+				new OpenLayers.Icon(this.src, iconSize, iconOffset)
+			    );
+			    markersLayerMS.addMarker(marker);                            
+                        } else {
+			    markersLayer.addMarker(marker);                        
+                        };
                     }
                 }
 
-                map.addLayer(markersLayer);
-                markersLayer.setVisibility(true);
+                map.addLayers([markersLayer, markersLayerMS, markersLayerBG]);
+                markersLayer.setZIndex(9005);
+                markersLayerMS.setZIndex(9004);
+                markersLayerBG.setZIndex(9003);
             } else {
                 alert('Could not reach Krautchan /int/ API.');
             }
